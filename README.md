@@ -2,10 +2,59 @@
 
 Newsbot 是一个自动化技术新闻聚合与分析工具。它从 Hacker News 热门博客中抓取最新文章，利用 AI（Ollama）进行评分、分类、摘要和趋势分析，并通过 Telegram Bot 推送每日技术速报。内置 HTTP 服务提供文章浏览页面和 REST API。
 
+## 系统架构
+
+```mermaid
+graph TB
+    subgraph External["外部数据源"]
+        HN["HN Popularity CDN"]
+        RSS["博客 RSS/Atom"]
+        Ollama["Ollama AI"]
+    end
+
+    subgraph Newsbot["Newsbot 服务"]
+        direction TB
+        Scheduler["Cron 调度器<br/>每 6 小时"]
+        Pipeline["数据 Pipeline"]
+        HTTP["HTTP Server :8080"]
+        DB[("SQLite<br/>data/newsbot.db")]
+    end
+
+    subgraph Output["输出"]
+        Web["Web 文章页面"]
+        API["REST API"]
+        TG["Telegram Bot"]
+    end
+
+    HN -->|Top 100 博客| Pipeline
+    RSS -->|文章内容| Pipeline
+    Pipeline -->|评分/摘要| Ollama
+    Ollama -->|AI 结果| Pipeline
+    Pipeline --> DB
+    Scheduler -->|触发| Pipeline
+    DB --> HTTP
+    HTTP --> Web
+    HTTP --> API
+    Pipeline -->|通知| TG
+```
+
 ## 数据 Pipeline
 
-```
-fetch-blogs → scrape → analyze → report/notify
+```mermaid
+graph LR
+    A["fetch-blogs<br/>获取热门博客"] --> B["scrape<br/>抓取 RSS 文章"]
+    B --> C["analyze<br/>AI 评分 + 摘要"]
+    C --> D["notify<br/>Telegram 推送"]
+
+    A -.- A1["HN Popularity CDN<br/>→ blogs 表"]
+    B -.- B1["并发 10 路 RSS<br/>→ articles 表"]
+    C -.- C1["3 维评分 + 分类<br/>+ 中文摘要<br/>→ article_analysis 表"]
+    D -.- D1["未推送文章<br/>+ 趋势报告<br/>→ Telegram"]
+
+    style A fill:#4285f4,color:#fff
+    style B fill:#34a853,color:#fff
+    style C fill:#fbbc04,color:#000
+    style D fill:#ea4335,color:#fff
 ```
 
 1. **fetch-blogs** — 从 [HN Popularity](https://refactoringenglish.com/tools/hn-popularity/) CDN 获取 Top 100 热门博客
@@ -13,6 +62,20 @@ fetch-blogs → scrape → analyze → report/notify
 3. **analyze** — AI 从相关性、质量、时效性三个维度打分（1-10），自动分类和关键词提取；为所有文章生成结构化摘要、中文标题翻译、推荐理由（失败自动重试 3 次）
 4. **report** — 输出 Top 文章列表 + AI 归纳 2-3 个宏观技术趋势，自动推送 Telegram（如已配置）
 5. **notify** — 自动筛选未推送的文章，生成趋势报告并发送 Telegram 通知
+
+## 效果展示
+
+### 文章浏览页面
+
+> 访问 `http://localhost:8080/articles`，支持 24h / 3 Days / 7 Days 时间窗口切换
+
+![文章列表页面](docs/images/articles-page.png)
+
+### Telegram 推送
+
+> 配置 Bot Token 和 Chat ID 后，pipeline 完成自动推送技术速报
+
+![Telegram 通知](docs/images/telegram-notify.png)
 
 ## 快速开始
 
@@ -104,6 +167,23 @@ make docker-run                 # 运行容器
 
 ### REST API
 
+```mermaid
+sequenceDiagram
+    participant Client as 爬虫 / 客户端
+    participant API as Newsbot API
+    participant DB as SQLite
+
+    Client->>API: GET /api/articles?window=24h&limit=10
+    API->>DB: TopScoredArticles(10, "24h")
+    DB-->>API: []ArticleWithAnalysis
+    API-->>Client: 200 JSON { window, count, articles[] }
+
+    Client->>API: GET /api/articles/42
+    API->>DB: GetArticleWithAnalysis(42)
+    DB-->>API: ArticleWithAnalysis
+    API-->>Client: 200 JSON { article }
+```
+
 | 路径 | 说明 |
 |---|---|
 | `GET /api/articles?window=24h&limit=20` | 文章列表（JSON），按总分降序 |
@@ -157,6 +237,7 @@ newsbot/
 ├── newsbot.yaml                     # 配置文件
 ├── data/
 │   └── newsbot.db                   # SQLite 数据库（WAL 模式）
+├── docs/images/                     # 效果截图
 └── internal/
     ├── config/                      # 配置加载（YAML + .env + 环境变量）
     ├── store/                       # SQLite 持久化（blogs / articles / article_analysis）

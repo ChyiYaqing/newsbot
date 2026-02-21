@@ -53,7 +53,7 @@ fetch-blogs: hnpopular CDN → parse CSVs → upsert blogs table
 scrape:      blogs table → concurrent RSS fetch (10 goroutines) → insert articles table
 analyze:     articles table → time window filter → AI score/classify → AI summarize → insert article_analysis table
 report:      article_analysis table → print top articles → AI trend summary (2-3 macro trends) → auto-send Telegram if configured
-notify:      article_analysis table → filter unnotified → format report → send via Telegram → mark notified
+notify:      article_analysis table → filter unnotified → AI trend report → send via Telegram → mark notified (dedup)
 run:         run pipeline immediately → HTTP server (:8080) + cron scheduler (every 6h) in one process
 ```
 

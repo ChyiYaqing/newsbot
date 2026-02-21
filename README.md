@@ -12,7 +12,7 @@ fetch-blogs → scrape → analyze → report/notify
 2. **scrape** — 并发抓取博客 RSS/Atom 订阅源（10 路并发，兼容 RSS 2.0 / Atom），每个博客最多 10 篇文章
 3. **analyze** — AI 从相关性、质量、时效性三个维度打分（1-10），自动分类和关键词提取；为所有文章生成结构化摘要、中文标题翻译、推荐理由（失败自动重试 3 次）
 4. **report** — 输出 Top 文章列表 + AI 归纳 2-3 个宏观技术趋势，自动推送 Telegram（如已配置）
-5. **notify** — 手动触发 Telegram 推送
+5. **notify** — 自动筛选未推送的文章，生成趋势报告并发送 Telegram 通知
 
 ## 快速开始
 
@@ -70,7 +70,7 @@ go run . fetch-blogs            # 获取热门博客
 go run . scrape                 # 抓取最新文章
 go run . analyze 24h            # AI 分析（可选 3days / 7days）
 go run . report 24h             # 生成报告 + 自动推送 Telegram
-go run . notify 24h             # 手动推送 Telegram
+go run . notify 24h             # 自动推送未通知的文章到 Telegram
 
 # 后台服务（推荐）— 立即执行 pipeline，然后 HTTP + cron 每 6 小时一次
 go run . run
@@ -182,9 +182,9 @@ newsbot/
 
 配置 `TG_BOT_TOKEN` 和 `TG_CHAT_ID` 后：
 
-- `report` 命令执行完毕后自动推送
-- `notify` 命令手动触发推送
-- `run` 调度器每次 pipeline 完成后自动推送
+- `report` — 生成报告后自动推送已分析的文章
+- `notify` — 自动筛选未推送的文章并发送通知（去重，不会重复推送）
+- `run` — 调度器每次 pipeline 完成后自动推送
 
 消息格式为 HTML，包含 Top 文章列表（评分、分类、中文标题、推荐理由、链接）和技术趋势总结。超过 4096 字符的消息会自动拆分为多条发送。
 

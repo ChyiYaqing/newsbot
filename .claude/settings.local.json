@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "Bash(go get:*)",
+      "Bash(curl:*)",
+      "Bash(go build:*)",
+      "Bash(go mod tidy:*)",
+      "mcp__ide__getDiagnostics",
+      "WebSearch",
+      "Bash(gh api:*)",
+      "Bash(go run:*)",
+      "Bash(go vet:*)",
+      "Bash(sqlite3:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

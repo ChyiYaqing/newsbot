@@ -1,0 +1,25 @@
+# Binaries
+newsbot
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test
+*.test
+*.out
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Database
+data/
+
+# Secrets
+.env
+
+# OS
+.DS_Store

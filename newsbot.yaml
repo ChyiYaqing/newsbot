@@ -1,0 +1,6 @@
+ollama:
+  address: "https://llm.chyidl.com"
+  model: "gemma3:4b"
+  # username and password should be set via .env file or environment variables:
+  # OLLAMA_USERNAME=user
+  # OLLAMA_PASSWORD=secret

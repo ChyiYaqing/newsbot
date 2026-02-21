@@ -1,0 +1,12 @@
+services:
+  newsbot:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./newsbot.yaml:/app/newsbot.yaml:ro
+      - ./.env:/app/.env:ro
+      - ./data:/app/data
+    environment:
+      - TZ=Asia/Shanghai

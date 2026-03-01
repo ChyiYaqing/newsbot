@@ -1,8 +1,9 @@
 APP      := newsbot
-IMAGE    := $(APP)
+IMAGE    := chyiyaqing/$(APP)
 TAG      := latest
+PLATFORMS := linux/amd64,linux/arm64
 
-.PHONY: build run clean docker docker-run up down lint
+.PHONY: build run clean docker docker-run docker-push up down lint
 
 build:
 	go build -trimpath -ldflags="-s -w" -o $(APP) .
@@ -18,6 +19,12 @@ lint:
 
 docker:
 	docker build -t $(IMAGE):$(TAG) .
+
+docker-buildx:
+	docker buildx build --platform $(PLATFORMS) -t $(IMAGE):$(TAG) --push .
+
+docker-push: docker
+	docker push $(IMAGE):$(TAG)
 
 docker-run:
 	docker run --rm -it \

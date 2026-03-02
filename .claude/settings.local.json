@@ -16,7 +16,9 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(git pull:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(docker build:*)",
+      "Bash(gh auth status:*)"
     ]
   }
 }

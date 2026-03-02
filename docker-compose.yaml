@@ -1,5 +1,6 @@
 services:
   newsbot:
+    container_name: newsbot
     build: .
     restart: unless-stopped
     ports:
@@ -10,3 +11,8 @@ services:
       - ./data:/app/data
     environment:
       - TZ=Asia/Shanghai
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

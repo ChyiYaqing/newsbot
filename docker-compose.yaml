@@ -1,7 +1,7 @@
 services:
   newsbot:
     container_name: newsbot
-    build: .
+    image: chyiyaqing/newsbot:latest
     restart: unless-stopped
     expose:
       - "8080"
@@ -19,7 +19,7 @@ services:
 
   frontend:
     container_name: newsbot-frontend
-    build: ./frontend
+    image: chyiyaqing/newsbot-frontend:latest
     restart: unless-stopped
     ports:
       - "80:80"

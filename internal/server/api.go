@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chyiyaqing/newsbot/internal/notify/email"
 	"github.com/chyiyaqing/newsbot/internal/store"
 )
 
@@ -133,6 +134,68 @@ func toAPIArticle(a store.ArticleWithAnalysis) apiArticle {
 		Timeliness:      a.ArticleAnalysis.Timeliness,
 		PublishedAt:     fmtTimeRFC3339(a.Article.PublishedAt),
 		AnalyzedAt:      fmtTimeRFC3339(a.ArticleAnalysis.AnalyzedAt),
+	}
+}
+
+// POST /api/subscribe — {"email":"user@example.com"}
+func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
+		return
+	}
+
+	var body struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Email == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Error: "email is required"})
+		return
+	}
+	if !strings.Contains(body.Email, "@") {
+		writeJSON(w, http.StatusBadRequest, apiError{Error: "invalid email"})
+		return
+	}
+
+	token, err := email.GenerateToken()
+	if err != nil {
+		log.Printf("ERROR: generate subscribe token: %v", err)
+		writeJSON(w, http.StatusInternalServerError, apiError{Error: "internal error"})
+		return
+	}
+
+	inserted, err := s.db.AddSubscriber(body.Email, token)
+	if err != nil {
+		log.Printf("ERROR: add subscriber: %v", err)
+		writeJSON(w, http.StatusInternalServerError, apiError{Error: "internal error"})
+		return
+	}
+
+	if inserted {
+		log.Printf("New subscriber: %s", body.Email)
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "subscribed"})
+}
+
+// GET /api/unsubscribe?token=xxx
+func (s *Server) handleUnsubscribe(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Error(w, "missing token", http.StatusBadRequest)
+		return
+	}
+
+	removed, err := s.db.RemoveSubscriberByToken(token)
+	if err != nil {
+		log.Printf("ERROR: remove subscriber: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if removed {
+		w.Write([]byte(`<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:60px"><h2>已成功取消订阅</h2><p style="color:#64748b">您将不再收到 NewsBot 的邮件通知。</p></body></html>`)) //nolint:errcheck
+	} else {
+		w.Write([]byte(`<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:60px"><h2>链接已失效</h2><p style="color:#64748b">该取消订阅链接无效或已使用过。</p></body></html>`)) //nolint:errcheck
 	}
 }
 

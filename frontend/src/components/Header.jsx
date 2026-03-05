@@ -1,8 +1,56 @@
+import { useState } from 'react'
+import { subscribe } from '../api'
+
 const TABS = [
   { value: '24h', label: '24h' },
   { value: '3days', label: '3 Days' },
   { value: '7days', label: '7 Days' },
 ]
+
+function SubscribeInline() {
+  const [email, setEmail] = useState('')
+  const [status, setStatus] = useState(null) // null | 'loading' | 'ok' | 'error'
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!email) return
+    setStatus('loading')
+    try {
+      await subscribe(email)
+      setStatus('ok')
+      setEmail('')
+    } catch {
+      setStatus('error')
+      setTimeout(() => setStatus(null), 3000)
+    }
+  }
+
+  if (status === 'ok') {
+    return <span className="header-subscribe-ok">订阅成功 ✓</span>
+  }
+
+  return (
+    <form className="header-subscribe" onSubmit={handleSubmit}>
+      <input
+        className="header-subscribe-input"
+        type="email"
+        placeholder="邮箱订阅"
+        value={email}
+        onChange={e => setEmail(e.target.value)}
+        required
+        disabled={status === 'loading'}
+      />
+      <button
+        className="header-subscribe-btn"
+        type="submit"
+        disabled={status === 'loading'}
+      >
+        {status === 'loading' ? '…' : '订阅'}
+      </button>
+      {status === 'error' && <span className="header-subscribe-err">失败</span>}
+    </form>
+  )
+}
 
 export default function Header({ currentWindow, onWindowChange }) {
   return (
@@ -16,17 +64,20 @@ export default function Header({ currentWindow, onWindowChange }) {
             </svg>
             <span className="logo-text">NewsBot</span>
           </div>
-          <nav className="tabs">
-            {TABS.map(({ value, label }) => (
-              <button
-                key={value}
-                className={`tab${currentWindow === value ? ' active' : ''}`}
-                onClick={() => onWindowChange(value)}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
+          <div className="header-right">
+            <nav className="tabs">
+              {TABS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  className={`tab${currentWindow === value ? ' active' : ''}`}
+                  onClick={() => onWindowChange(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </nav>
+            <SubscribeInline />
+          </div>
         </div>
       </div>
     </header>

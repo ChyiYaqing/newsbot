@@ -48,6 +48,13 @@ type ArticleWithAnalysis struct {
 	ArticleAnalysis
 }
 
+type Subscriber struct {
+	ID        int64
+	Email     string
+	Token     string
+	CreatedAt time.Time
+}
+
 type Store struct {
 	db *sql.DB
 }
@@ -127,6 +134,19 @@ func (s *Store) migrate() error {
 
 	// Add notified_at column (ignore error if column already exists).
 	s.db.Exec("ALTER TABLE article_analysis ADD COLUMN notified_at DATETIME")
+
+	// Create subscribers table (idempotent).
+	_, err = s.db.Exec(`
+		CREATE TABLE IF NOT EXISTS subscribers (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			email      TEXT NOT NULL UNIQUE,
+			token      TEXT NOT NULL UNIQUE,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+	`)
+	if err != nil {
+		return err
+	}
 
 	// Normalize existing published_at timestamps from Go's default format to RFC3339.
 	// e.g. "2026-02-17 12:01:45 +0000 UTC" → "2026-02-17T12:01:45Z"
@@ -326,7 +346,7 @@ func (s *Store) UnsummarizedHighScoreArticles(window string, minScore int) ([]Ar
 		WHERE a.published_at >= ?
 		  AND aa.total_score >= ?
 		  AND aa.ai_summary = ''
-		ORDER BY aa.total_score DESC
+		ORDER BY aa.total_score DESC, a.published_at DESC
 	`, cutoff, minScore)
 	if err != nil {
 		return nil, err
@@ -386,7 +406,7 @@ func (s *Store) TopScoredArticles(limit int, window string) ([]ArticleWithAnalys
 		FROM articles a
 		JOIN article_analysis aa ON a.id = aa.article_id
 		WHERE a.published_at >= ?
-		ORDER BY aa.total_score DESC
+		ORDER BY aa.total_score DESC, a.published_at DESC
 		LIMIT ?
 	`, cutoff, limit)
 	if err != nil {
@@ -433,7 +453,7 @@ func (s *Store) UnnotifiedAnalyses(window string) ([]ArticleWithAnalysis, error)
 		JOIN article_analysis aa ON a.id = aa.article_id
 		WHERE a.published_at >= ?
 		  AND aa.notified_at IS NULL
-		ORDER BY aa.total_score DESC
+		ORDER BY aa.total_score DESC, a.published_at DESC
 		LIMIT 20
 	`, cutoff)
 	if err != nil {
@@ -479,6 +499,50 @@ func (s *Store) MarkNotified(articleIDs []int64) error {
 	)
 	_, err := s.db.Exec(query, args...)
 	return err
+}
+
+// AddSubscriber inserts a new email subscriber. Returns false if already exists.
+func (s *Store) AddSubscriber(email, token string) (bool, error) {
+	res, err := s.db.Exec(
+		"INSERT OR IGNORE INTO subscribers (email, token, created_at) VALUES (?, ?, ?)",
+		email, token, time.Now().UTC().Format(time.RFC3339),
+	)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+// ListSubscribers returns all subscribers.
+func (s *Store) ListSubscribers() ([]Subscriber, error) {
+	rows, err := s.db.Query("SELECT id, email, token, created_at FROM subscribers ORDER BY id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []Subscriber
+	for rows.Next() {
+		var sub Subscriber
+		var createdAt string
+		if err := rows.Scan(&sub.ID, &sub.Email, &sub.Token, &createdAt); err != nil {
+			return nil, err
+		}
+		sub.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		results = append(results, sub)
+	}
+	return results, rows.Err()
+}
+
+// RemoveSubscriberByToken deletes a subscriber by their unsubscribe token.
+func (s *Store) RemoveSubscriberByToken(token string) (bool, error) {
+	res, err := s.db.Exec("DELETE FROM subscribers WHERE token = ?", token)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
 }
 
 // windowCutoff returns the UTC cutoff time formatted for SQLite comparison.

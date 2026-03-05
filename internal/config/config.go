@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -10,6 +11,16 @@ import (
 type Config struct {
 	Ollama   OllamaConfig   `yaml:"ollama"`
 	Telegram TelegramConfig `yaml:"telegram"`
+	SMTP     SMTPConfig     `yaml:"smtp"`
+}
+
+type SMTPConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+	From     string `yaml:"from"`
+	SiteURL  string `yaml:"site_url"`
 }
 
 type TelegramConfig struct {
@@ -71,6 +82,26 @@ func applyEnv(cfg *Config) {
 	}
 	if v := os.Getenv("TG_CHAT_ID"); v != "" {
 		cfg.Telegram.ChatID = v
+	}
+	if v := os.Getenv("SMTP_HOST"); v != "" {
+		cfg.SMTP.Host = v
+	}
+	if v := os.Getenv("SMTP_PORT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.SMTP.Port = n
+		}
+	}
+	if v := os.Getenv("SMTP_USERNAME"); v != "" {
+		cfg.SMTP.Username = v
+	}
+	if v := os.Getenv("SMTP_PASSWORD"); v != "" {
+		cfg.SMTP.Password = v
+	}
+	if v := os.Getenv("SMTP_FROM"); v != "" {
+		cfg.SMTP.From = v
+	}
+	if v := os.Getenv("SITE_URL"); v != "" {
+		cfg.SMTP.SiteURL = v
 	}
 }
 

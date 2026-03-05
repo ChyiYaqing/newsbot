@@ -4,3 +4,19 @@ ollama:
   # username and password should be set via .env file or environment variables:
   # OLLAMA_USERNAME=user
   # OLLAMA_PASSWORD=secret
+
+telegram:
+  # bot_token and chat_id should be set via .env file or environment variables:
+  # TG_BOT_TOKEN=your-bot-token
+  # TG_CHAT_ID=your-chat-id
+
+smtp:
+  host: "smtp.gmail.com"
+  port: 587
+  # Gmail requires an App Password (not your regular password).
+  # Steps: Google Account → Security → 2-Step Verification → App passwords
+  # Set credentials via .env file or environment variables:
+  # SMTP_USERNAME=your-gmail@gmail.com
+  # SMTP_PASSWORD=xxxx-xxxx-xxxx-xxxx  (16-char App Password)
+  # SMTP_FROM=NewsBot <your-gmail@gmail.com>
+  # SITE_URL=https://your-site.com

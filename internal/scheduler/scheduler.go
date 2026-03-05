@@ -9,6 +9,7 @@ import (
 	"github.com/chyiyaqing/newsbot/internal/ai"
 	"github.com/chyiyaqing/newsbot/internal/config"
 	"github.com/chyiyaqing/newsbot/internal/hnpopular"
+	"github.com/chyiyaqing/newsbot/internal/notify/email"
 	"github.com/chyiyaqing/newsbot/internal/notify/telegram"
 	"github.com/chyiyaqing/newsbot/internal/scraper"
 	"github.com/chyiyaqing/newsbot/internal/store"
@@ -17,6 +18,11 @@ import (
 
 // Run executes the full pipeline immediately, then starts a cron scheduler
 // to repeat it periodically. It blocks until ctx is cancelled.
+// emailCl builds an email client from config, or returns nil if not configured.
+func newEmailClient(cfg *config.Config) *email.Client {
+	return email.New(cfg.SMTP.Host, cfg.SMTP.Port, cfg.SMTP.Username, cfg.SMTP.Password, cfg.SMTP.From, cfg.SMTP.SiteURL)
+}
+
 func Run(ctx context.Context, db *store.Store, cfg *config.Config, schedule string) error {
 	if schedule == "" {
 		schedule = "0 */6 * * *" // every 6 hours
@@ -150,6 +156,36 @@ func runPipeline(ctx context.Context, db *store.Store, cfg *config.Config) {
 						log.Printf("WARNING: mark notified: %v", err)
 					}
 					log.Printf("Pipeline: notified %d new articles via Telegram", len(newArticles))
+				}
+			}
+		}
+	}
+
+	// Step 5: Send email to subscribers
+	emailCl := newEmailClient(cfg)
+	if emailCl != nil {
+		subscribers, err := db.ListSubscribers()
+		if err != nil {
+			log.Printf("WARNING: list subscribers: %v", err)
+		} else if len(subscribers) > 0 {
+			// Reuse the already-fetched newArticles if available, else query again
+			emailArticles, err := db.TopScoredArticles(20, "7days")
+			if err != nil {
+				log.Printf("WARNING: get articles for email: %v", err)
+			} else {
+				report, err := client.AnalyzeTrends(ctx, emailArticles)
+				if err != nil {
+					log.Printf("WARNING: trend analysis for email: %v", err)
+					report = nil
+				}
+				subject := "NewsBot 技术资讯周报"
+				for _, sub := range subscribers {
+					body := email.FormatEmailReport(emailArticles, report, "7days", sub.Token, cfg.SMTP.SiteURL)
+					if err := emailCl.SendHTML(sub.Email, subject, body); err != nil {
+						log.Printf("WARNING: send email to %s: %v", sub.Email, err)
+					} else {
+						log.Printf("Pipeline: email sent to %s", sub.Email)
+					}
 				}
 			}
 		}

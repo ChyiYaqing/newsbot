@@ -13,6 +13,7 @@ import (
 	"github.com/chyiyaqing/newsbot/internal/ai"
 	"github.com/chyiyaqing/newsbot/internal/config"
 	"github.com/chyiyaqing/newsbot/internal/hnpopular"
+	"github.com/chyiyaqing/newsbot/internal/notify/email"
 	"github.com/chyiyaqing/newsbot/internal/notify/telegram"
 	"github.com/chyiyaqing/newsbot/internal/scheduler"
 	"github.com/chyiyaqing/newsbot/internal/scraper"
@@ -345,8 +346,14 @@ func cmdRun(db *store.Store, cfg *config.Config) {
 		}
 	}
 
+	// Build email client (nil if not configured)
+	var emailCl server.EmailClient
+	if ec := email.New(cfg.SMTP.Host, cfg.SMTP.Port, cfg.SMTP.Username, cfg.SMTP.Password, cfg.SMTP.From, cfg.SMTP.SiteURL); ec != nil {
+		emailCl = ec
+	}
+
 	// Start HTTP server in background
-	srv := server.New(db, httpAddr)
+	srv := server.New(db, httpAddr, emailCl)
 	go func() {
 		if err := srv.Start(ctx); err != nil {
 			log.Fatalf("HTTP server error: %v", err)

@@ -13,17 +13,25 @@ import (
 )
 
 type Server struct {
-	db  *store.Store
-	srv *http.Server
+	db      *store.Store
+	emailCl EmailClient
+	srv     *http.Server
 }
 
-func New(db *store.Store, addr string) *Server {
-	s := &Server{db: db}
+// EmailClient is a minimal interface for sending HTML emails.
+type EmailClient interface {
+	SendHTML(to, subject, body string) error
+}
+
+func New(db *store.Store, addr string, emailCl EmailClient) *Server {
+	s := &Server{db: db, emailCl: emailCl}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/api/articles", s.handleAPIArticles)
 	mux.HandleFunc("/api/articles/", s.handleAPIArticleDetail)
+	mux.HandleFunc("/api/subscribe", s.handleSubscribe)
+	mux.HandleFunc("/api/unsubscribe", s.handleUnsubscribe)
 
 	s.srv = &http.Server{
 		Addr:    addr,
@@ -66,7 +74,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
+	"net/mail"
 	"net/smtp"
 	"strings"
 
@@ -46,19 +47,28 @@ func GenerateToken() (string, error) {
 func (c *Client) SendHTML(to, subject, htmlBody string) error {
 	msg := buildMessage(c.from, to, subject, htmlBody)
 	addr := fmt.Sprintf("%s:%d", c.host, c.port)
+	fromAddr := extractAddress(c.from)
 
 	if c.port == 465 {
-		return c.sendTLS(addr, to, msg)
+		return c.sendTLS(addr, fromAddr, to, msg)
 	}
 
 	var auth smtp.Auth
 	if c.username != "" {
 		auth = smtp.PlainAuth("", c.username, c.password, c.host)
 	}
-	return smtp.SendMail(addr, auth, c.from, []string{to}, msg)
+	return smtp.SendMail(addr, auth, fromAddr, []string{to}, msg)
 }
 
-func (c *Client) sendTLS(addr, to string, msg []byte) error {
+// extractAddress returns just the email address from a "Name <addr>" string.
+func extractAddress(from string) string {
+	if addr, err := mail.ParseAddress(from); err == nil {
+		return addr.Address
+	}
+	return from
+}
+
+func (c *Client) sendTLS(addr, from, to string, msg []byte) error {
 	conn, err := tls.Dial("tcp", addr, &tls.Config{ServerName: c.host})
 	if err != nil {
 		return fmt.Errorf("tls dial: %w", err)
@@ -75,7 +85,7 @@ func (c *Client) sendTLS(addr, to string, msg []byte) error {
 			return fmt.Errorf("smtp auth: %w", err)
 		}
 	}
-	if err := client.Mail(c.from); err != nil {
+	if err := client.Mail(from); err != nil {
 		return err
 	}
 	if err := client.Rcpt(to); err != nil {

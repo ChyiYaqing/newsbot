@@ -1,7 +1,7 @@
 APP       := newsbot
 IMAGE     := chyiyaqing/$(APP)
 FE_IMAGE  := chyiyaqing/$(APP)-frontend
-TAG       := latest
+TAG       := $(shell git describe --tags --abbrev=0 2>/dev/null || echo latest)
 PLATFORMS := linux/amd64,linux/arm64
 
 .PHONY: build run clean lint \

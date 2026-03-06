@@ -131,62 +131,65 @@ func runPipeline(ctx context.Context, db *store.Store, cfg *config.Config) {
 		}
 	}
 
-	// Step 4: Send Telegram notification (only new/unnotified articles)
-	tg := telegram.New(cfg.Telegram.BotToken, cfg.Telegram.ChatID)
-	if tg != nil {
-		newArticles, err := db.UnnotifiedAnalyses("7days")
-		if err != nil {
-			log.Printf("WARNING: get unnotified analyses: %v", err)
-		} else if len(newArticles) == 0 {
-			log.Println("Pipeline: no new articles to notify")
-		} else {
-			report, err := client.AnalyzeTrends(ctx, newArticles)
-			if err != nil {
-				log.Printf("WARNING: trend analysis for notification: %v", err)
-			} else {
-				msg := telegram.FormatReport(newArticles, report, "7days")
-				if err := tg.Send(ctx, "", msg); err != nil {
-					log.Printf("WARNING: telegram send: %v", err)
-				} else {
-					ids := make([]int64, len(newArticles))
-					for i, a := range newArticles {
-						ids[i] = a.Article.ID
-					}
-					if err := db.MarkNotified(ids); err != nil {
-						log.Printf("WARNING: mark notified: %v", err)
-					}
-					log.Printf("Pipeline: notified %d new articles via Telegram", len(newArticles))
-				}
-			}
-		}
+	// Step 4: Fetch unnotified articles (shared by Telegram and email)
+	newArticles, err := db.UnnotifiedAnalyses("7days")
+	if err != nil {
+		log.Printf("WARNING: get unnotified analyses: %v", err)
+		newArticles = nil
 	}
 
-	// Step 5: Send email to subscribers
-	emailCl := newEmailClient(cfg)
-	if emailCl != nil {
-		subscribers, err := db.ListSubscribers()
+	if len(newArticles) == 0 {
+		log.Println("Pipeline: no new articles to notify")
+	} else {
+		// Generate trend report once for both channels
+		report, err := client.AnalyzeTrends(ctx, newArticles)
 		if err != nil {
-			log.Printf("WARNING: list subscribers: %v", err)
-		} else if len(subscribers) > 0 {
-			// Reuse the already-fetched newArticles if available, else query again
-			emailArticles, err := db.TopScoredArticles(20, "7days")
-			if err != nil {
-				log.Printf("WARNING: get articles for email: %v", err)
+			log.Printf("WARNING: trend analysis for notification: %v", err)
+			report = nil
+		}
+
+		notified := false
+
+		// Step 4a: Send Telegram notification
+		tg := telegram.New(cfg.Telegram.BotToken, cfg.Telegram.ChatID)
+		if tg != nil {
+			msg := telegram.FormatReport(newArticles, report, "7days")
+			if err := tg.Send(ctx, "", msg); err != nil {
+				log.Printf("WARNING: telegram send: %v", err)
 			} else {
-				report, err := client.AnalyzeTrends(ctx, emailArticles)
-				if err != nil {
-					log.Printf("WARNING: trend analysis for email: %v", err)
-					report = nil
-				}
+				log.Printf("Pipeline: notified %d new articles via Telegram", len(newArticles))
+				notified = true
+			}
+		}
+
+		// Step 4b: Send email to subscribers
+		emailCl := newEmailClient(cfg)
+		if emailCl != nil {
+			subscribers, err := db.ListSubscribers()
+			if err != nil {
+				log.Printf("WARNING: list subscribers: %v", err)
+			} else if len(subscribers) > 0 {
 				subject := "NewsBot 技术资讯周报"
 				for _, sub := range subscribers {
-					body := email.FormatEmailReport(emailArticles, report, "7days", sub.Token, cfg.SMTP.SiteURL)
+					body := email.FormatEmailReport(newArticles, report, "7days", sub.Token, cfg.SMTP.SiteURL)
 					if err := emailCl.SendHTML(sub.Email, subject, body); err != nil {
 						log.Printf("WARNING: send email to %s: %v", sub.Email, err)
 					} else {
 						log.Printf("Pipeline: email sent to %s", sub.Email)
+						notified = true
 					}
 				}
+			}
+		}
+
+		// Mark articles as notified if at least one channel succeeded
+		if notified {
+			ids := make([]int64, len(newArticles))
+			for i, a := range newArticles {
+				ids[i] = a.Article.ID
+			}
+			if err := db.MarkNotified(ids); err != nil {
+				log.Printf("WARNING: mark notified: %v", err)
 			}
 		}
 	}

@@ -27,11 +27,11 @@ lint:
 docker:
 	docker build -t $(IMAGE):$(TAG) .
 
-docker-push: docker
-	docker push $(IMAGE):$(TAG)
+docker-push:
+	docker buildx build --platform $(PLATFORMS) -t $(IMAGE):$(TAG) --push .
 
 docker-buildx:
-	docker buildx build --platform $(PLATFORMS) -t $(IMAGE):$(TAG) --push .
+	docker buildx build --platform $(PLATFORMS) -t $(IMAGE):$(TAG) .
 
 docker-run:
 	docker run --rm -it \
@@ -55,11 +55,11 @@ fe-build: fe-install
 fe-docker:
 	docker build -t $(FE_IMAGE):$(TAG) ./frontend
 
-fe-docker-push: fe-docker
-	docker push $(FE_IMAGE):$(TAG)
+fe-docker-push:
+	docker buildx build --platform $(PLATFORMS) -t $(FE_IMAGE):$(TAG) --push ./frontend
 
 fe-docker-buildx:
-	docker buildx build --platform $(PLATFORMS) -t $(FE_IMAGE):$(TAG) --push ./frontend
+	docker buildx build --platform $(PLATFORMS) -t $(FE_IMAGE):$(TAG) ./frontend
 
 # ── Compose ────────────────────────────────────────────────────────────────
 

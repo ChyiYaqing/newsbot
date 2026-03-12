@@ -47,7 +47,7 @@ type apiError struct {
 	Error string `json:"error"`
 }
 
-// GET /api/articles?window=24h|3days|7days&limit=20
+// GET /api/articles?window=24h|3days|7days&limit=20&category=AI/ML
 func (s *Server) handleAPIArticles(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
@@ -68,7 +68,17 @@ func (s *Server) handleAPIArticles(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	articles, err := s.db.TopScoredArticles(limit, window)
+	category := r.URL.Query().Get("category")
+
+	var (
+		articles []store.ArticleWithAnalysis
+		err      error
+	)
+	if category != "" {
+		articles, err = s.db.TopScoredArticlesByCategory(limit, window, category)
+	} else {
+		articles, err = s.db.TopScoredArticles(limit, window)
+	}
 	if err != nil {
 		log.Printf("ERROR: api list articles: %v", err)
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "failed to load articles"})
@@ -172,6 +182,9 @@ func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 
 	if inserted {
 		log.Printf("New subscriber: %s", body.Email)
+		if s.emailCl != nil {
+			go sendWelcomeEmail(s.emailCl, body.Email, token)
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "subscribed"})
 }
@@ -196,6 +209,66 @@ func (s *Server) handleUnsubscribe(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:60px"><h2>已成功取消订阅</h2><p style="color:#64748b">您将不再收到 NewsBot 的邮件通知。</p></body></html>`)) //nolint:errcheck
 	} else {
 		w.Write([]byte(`<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:60px"><h2>链接已失效</h2><p style="color:#64748b">该取消订阅链接无效或已使用过。</p></body></html>`)) //nolint:errcheck
+	}
+}
+
+// GET /api/categories?window=24h|3days|7days
+func (s *Server) handleAPICategories(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
+		return
+	}
+
+	window := r.URL.Query().Get("window")
+	switch window {
+	case "24h", "3days", "7days":
+	default:
+		window = "24h"
+	}
+
+	categories, err := s.db.CategoriesForWindow(window)
+	if err != nil {
+		log.Printf("ERROR: api categories: %v", err)
+		writeJSON(w, http.StatusInternalServerError, apiError{Error: "failed to load categories"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"window":     window,
+		"categories": categories,
+	})
+}
+
+// GET /api/stats?window=24h|3days|7days
+func (s *Server) handleAPIStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
+		return
+	}
+
+	window := r.URL.Query().Get("window")
+	switch window {
+	case "24h", "3days", "7days":
+	default:
+		window = "24h"
+	}
+
+	stats, err := s.db.StatsForWindow(window)
+	if err != nil {
+		log.Printf("ERROR: api stats: %v", err)
+		writeJSON(w, http.StatusInternalServerError, apiError{Error: "failed to load stats"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"window": window,
+		"stats":  stats,
+	})
+}
+
+func sendWelcomeEmail(cl EmailClient, to, token string) {
+	if err := cl.SendWelcome(to, token); err != nil {
+		log.Printf("WARNING: send welcome email to %s: %v", to, err)
 	}
 }
 

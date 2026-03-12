@@ -438,6 +438,109 @@ func (s *Store) AnalysesByTimeWindow(window string) ([]ArticleWithAnalysis, erro
 	return s.TopScoredArticles(1000, window)
 }
 
+// TopScoredArticlesByCategory returns top scored articles filtered by category.
+func (s *Store) TopScoredArticlesByCategory(limit int, window, category string) ([]ArticleWithAnalysis, error) {
+	cutoff, err := windowCutoff(window)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := s.db.Query(`
+		SELECT a.id, a.blog_domain, a.title, a.url, a.summary, a.published_at, a.scraped_at,
+		       aa.id, aa.article_id, aa.relevance, aa.quality, aa.timeliness, aa.total_score,
+		       aa.category, aa.keywords, aa.ai_summary, aa.title_cn, aa.recommend_reason, aa.analyzed_at
+		FROM articles a
+		JOIN article_analysis aa ON a.id = aa.article_id
+		WHERE a.published_at >= ? AND aa.category = ?
+		ORDER BY aa.total_score DESC, a.published_at DESC
+		LIMIT ?
+	`, cutoff, category, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []ArticleWithAnalysis
+	for rows.Next() {
+		var r ArticleWithAnalysis
+		if err := rows.Scan(
+			&r.Article.ID, &r.Article.BlogDomain, &r.Article.Title, &r.Article.URL,
+			&r.Article.Summary, &r.Article.PublishedAt, &r.Article.ScrapedAt,
+			&r.ArticleAnalysis.ID, &r.ArticleAnalysis.ArticleID,
+			&r.ArticleAnalysis.Relevance, &r.ArticleAnalysis.Quality, &r.ArticleAnalysis.Timeliness,
+			&r.ArticleAnalysis.TotalScore, &r.ArticleAnalysis.Category, &r.ArticleAnalysis.Keywords,
+			&r.ArticleAnalysis.AISummary, &r.ArticleAnalysis.TitleCN, &r.ArticleAnalysis.RecommendReason,
+			&r.ArticleAnalysis.AnalyzedAt,
+		); err != nil {
+			return nil, err
+		}
+		results = append(results, r)
+	}
+	return results, rows.Err()
+}
+
+// StatsForWindow returns aggregate stats for a given time window.
+type Stats struct {
+	TotalArticles    int `json:"total_articles"`
+	AnalyzedArticles int `json:"analyzed_articles"`
+	AvgScore         int `json:"avg_score"`
+	TopScore         int `json:"top_score"`
+}
+
+func (s *Store) StatsForWindow(window string) (*Stats, error) {
+	cutoff, err := windowCutoff(window)
+	if err != nil {
+		return nil, err
+	}
+
+	row := s.db.QueryRow(`
+		SELECT
+			COUNT(DISTINCT a.id),
+			COUNT(DISTINCT aa.article_id),
+			COALESCE(AVG(aa.total_score), 0),
+			COALESCE(MAX(aa.total_score), 0)
+		FROM articles a
+		LEFT JOIN article_analysis aa ON a.id = aa.article_id
+		WHERE a.published_at >= ?
+	`, cutoff)
+
+	var st Stats
+	if err := row.Scan(&st.TotalArticles, &st.AnalyzedArticles, &st.AvgScore, &st.TopScore); err != nil {
+		return nil, err
+	}
+	return &st, nil
+}
+
+// CategoriesForWindow returns distinct categories with article counts for the given window.
+func (s *Store) CategoriesForWindow(window string) ([]string, error) {
+	cutoff, err := windowCutoff(window)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := s.db.Query(`
+		SELECT DISTINCT aa.category
+		FROM articles a
+		JOIN article_analysis aa ON a.id = aa.article_id
+		WHERE a.published_at >= ? AND aa.category != ''
+		ORDER BY aa.category
+	`, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var categories []string
+	for rows.Next() {
+		var c string
+		if err := rows.Scan(&c); err != nil {
+			return nil, err
+		}
+		categories = append(categories, c)
+	}
+	return categories, rows.Err()
+}
+
 // UnnotifiedAnalyses returns top scored articles that have not been notified yet within a time window.
 func (s *Store) UnnotifiedAnalyses(window string) ([]ArticleWithAnalysis, error) {
 	cutoff, err := windowCutoff(window)

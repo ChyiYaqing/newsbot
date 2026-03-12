@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -169,7 +170,7 @@ func runPipeline(ctx context.Context, db *store.Store, cfg *config.Config) {
 			if err != nil {
 				log.Printf("WARNING: list subscribers: %v", err)
 			} else if len(subscribers) > 0 {
-				subject := "NewsBot 技术资讯周报"
+				subject := fmt.Sprintf("NewsBot 技术资讯 — 最新 %d 篇精选", len(newArticles))
 				for _, sub := range subscribers {
 					body := email.FormatEmailReport(newArticles, report, "7days", sub.Token, cfg.SMTP.SiteURL)
 					if err := emailCl.SendHTML(sub.Email, subject, body); err != nil {

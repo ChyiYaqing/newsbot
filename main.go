@@ -127,13 +127,14 @@ func cmdScrape(db *store.Store) {
 }
 
 func cmdAnalyze(db *store.Store, cfg *config.Config, window string) {
-	articles, err := db.ArticlesByTimeWindow(window)
+	articles, err := db.UnanalyzedArticles(window)
 	if err != nil {
 		log.Fatalf("Failed to get articles: %v", err)
 	}
 
 	if len(articles) == 0 {
-		log.Fatalf("No articles found in %s window. Run 'newsbot scrape' first.", window)
+		log.Printf("No unanalyzed articles found in %s window.", window)
+		return
 	}
 
 	client := ai.NewClient(cfg.Ollama.Address, cfg.Ollama.Model, cfg.Ollama.Username, cfg.Ollama.Password)

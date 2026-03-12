@@ -113,6 +113,30 @@ func buildMessage(from, to, subject, htmlBody string) []byte {
 	return []byte(sb.String())
 }
 
+// SendWelcome sends a welcome / subscription-confirmation email.
+func (c *Client) SendWelcome(to, token string) error {
+	subject := "欢迎订阅 NewsBot 技术资讯"
+	var unsubURL string
+	if c.siteURL != "" && token != "" {
+		unsubURL = strings.TrimRight(c.siteURL, "/") + "/api/unsubscribe?token=" + token
+	}
+
+	var sb strings.Builder
+	sb.WriteString(`<!DOCTYPE html><html><head><meta charset="UTF-8"></head>`)
+	sb.WriteString(`<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:640px;margin:0 auto;padding:40px 20px;color:#0f172a;line-height:1.6">`)
+	sb.WriteString(`<h1 style="font-size:20px;margin-bottom:8px">欢迎订阅 NewsBot！</h1>`)
+	sb.WriteString(`<p style="color:#475569">您已成功订阅 NewsBot 技术资讯。我们会定期为您推送精选技术文章与趋势分析。</p>`)
+	if unsubURL != "" {
+		sb.WriteString(fmt.Sprintf(
+			`<p style="margin-top:32px;font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:16px">不想再收到邮件？<a href="%s" style="color:#94a3b8">取消订阅</a></p>`,
+			escapeAttr(unsubURL),
+		))
+	}
+	sb.WriteString(`</body></html>`)
+
+	return c.SendHTML(to, subject, sb.String())
+}
+
 // FormatEmailReport builds an HTML email body from analyzed articles and trends.
 func FormatEmailReport(articles []store.ArticleWithAnalysis, trends *ai.TrendReport, window, unsubscribeToken, siteURL string) string {
 	var sb strings.Builder

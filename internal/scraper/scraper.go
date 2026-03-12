@@ -140,5 +140,13 @@ func truncate(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
 	}
-	return s[:maxLen] + "..."
+	// Truncate at a rune boundary to avoid splitting multi-byte UTF-8 characters.
+	n := 0
+	for i := range s {
+		if n >= maxLen {
+			return s[:i] + "..."
+		}
+		n++
+	}
+	return s
 }

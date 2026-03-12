@@ -21,6 +21,7 @@ type Server struct {
 // EmailClient is a minimal interface for sending HTML emails.
 type EmailClient interface {
 	SendHTML(to, subject, body string) error
+	SendWelcome(to, token string) error
 }
 
 func New(db *store.Store, addr string, emailCl EmailClient) *Server {
@@ -30,6 +31,8 @@ func New(db *store.Store, addr string, emailCl EmailClient) *Server {
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/api/articles", s.handleAPIArticles)
 	mux.HandleFunc("/api/articles/", s.handleAPIArticleDetail)
+	mux.HandleFunc("/api/categories", s.handleAPICategories)
+	mux.HandleFunc("/api/stats", s.handleAPIStats)
 	mux.HandleFunc("/api/subscribe", s.handleSubscribe)
 	mux.HandleFunc("/api/unsubscribe", s.handleUnsubscribe)
 

@@ -10,8 +10,14 @@ import (
 
 type Config struct {
 	Ollama   OllamaConfig   `yaml:"ollama"`
+	Deepseek DeepseekConfig `yaml:"deepseek"`
 	Telegram TelegramConfig `yaml:"telegram"`
 	SMTP     SMTPConfig     `yaml:"smtp"`
+}
+
+type DeepseekConfig struct {
+	APIKey string `yaml:"api_key"`
+	Model  string `yaml:"model"`
 }
 
 type SMTPConfig struct {
@@ -76,6 +82,12 @@ func applyEnv(cfg *Config) {
 	}
 	if v := os.Getenv("OLLAMA_PASSWORD"); v != "" {
 		cfg.Ollama.Password = v
+	}
+	if v := os.Getenv("DEEPSEEK_API_KEY"); v != "" {
+		cfg.Deepseek.APIKey = v
+	}
+	if v := os.Getenv("DEEPSEEK_MODEL"); v != "" {
+		cfg.Deepseek.Model = v
 	}
 	if v := os.Getenv("TG_BOT_TOKEN"); v != "" {
 		cfg.Telegram.BotToken = v

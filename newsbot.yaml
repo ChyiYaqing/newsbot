@@ -5,6 +5,12 @@ ollama:
   # OLLAMA_USERNAME=user
   # OLLAMA_PASSWORD=secret
 
+deepseek:
+  model: "deepseek-chat"
+  # api_key should be set via .env file or environment variable:
+  # DEEPSEEK_API_KEY=sk-...
+  # When set, DeepSeek takes priority over Ollama.
+
 telegram:
   # bot_token and chat_id should be set via .env file or environment variables:
   # TG_BOT_TOKEN=your-bot-token

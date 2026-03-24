@@ -71,6 +71,13 @@ func main() {
 	}
 }
 
+func newAIClient(cfg *config.Config) *ai.Client {
+	if cfg.Deepseek.APIKey != "" {
+		return ai.NewDeepSeekClient(cfg.Deepseek.APIKey, cfg.Deepseek.Model)
+	}
+	return ai.NewClient(cfg.Ollama.Address, cfg.Ollama.Model, cfg.Ollama.Username, cfg.Ollama.Password)
+}
+
 func usage() {
 	fmt.Fprintf(os.Stderr, `Usage: newsbot <command>
 
@@ -137,7 +144,7 @@ func cmdAnalyze(db *store.Store, cfg *config.Config, window string) {
 		return
 	}
 
-	client := ai.NewClient(cfg.Ollama.Address, cfg.Ollama.Model, cfg.Ollama.Username, cfg.Ollama.Password)
+	client := newAIClient(cfg)
 	ctx := context.Background()
 
 	log.Printf("Analyzing %d articles from %s window...", len(articles), window)
@@ -248,7 +255,7 @@ func cmdReport(db *store.Store, cfg *config.Config, window string) {
 	}
 
 	// Generate trend report
-	client := ai.NewClient(cfg.Ollama.Address, cfg.Ollama.Model, cfg.Ollama.Username, cfg.Ollama.Password)
+	client := newAIClient(cfg)
 	ctx := context.Background()
 
 	log.Println("Generating trend report...")
@@ -307,7 +314,7 @@ func cmdNotify(db *store.Store, cfg *config.Config, window string) {
 		return
 	}
 
-	client := ai.NewClient(cfg.Ollama.Address, cfg.Ollama.Model, cfg.Ollama.Username, cfg.Ollama.Password)
+	client := newAIClient(cfg)
 	ctx := context.Background()
 
 	log.Printf("Generating trend report for %d new articles...", len(newArticles))

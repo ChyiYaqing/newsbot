@@ -16,6 +16,7 @@ type Client struct {
 	model      string
 	username   string
 	password   string
+	apiKey     string // Bearer token auth (DeepSeek)
 	httpClient *http.Client
 }
 
@@ -25,6 +26,18 @@ func NewClient(baseURL, model, username, password string) *Client {
 		model:      model,
 		username:   username,
 		password:   password,
+		httpClient: &http.Client{Timeout: 120 * time.Second},
+	}
+}
+
+func NewDeepSeekClient(apiKey, model string) *Client {
+	if model == "" {
+		model = "deepseek-chat"
+	}
+	return &Client{
+		baseURL:    "https://api.deepseek.com",
+		model:      model,
+		apiKey:     apiKey,
 		httpClient: &http.Client{Timeout: 120 * time.Second},
 	}
 }
@@ -70,7 +83,9 @@ func (c *Client) ChatCompletion(ctx context.Context, systemPrompt, userPrompt st
 		return "", fmt.Errorf("create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	if c.username != "" {
+	if c.apiKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	} else if c.username != "" {
 		httpReq.SetBasicAuth(c.username, c.password)
 	}
 

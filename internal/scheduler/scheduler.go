@@ -19,6 +19,13 @@ import (
 
 // Run executes the full pipeline immediately, then starts a cron scheduler
 // to repeat it periodically. It blocks until ctx is cancelled.
+func newAIClient(cfg *config.Config) *ai.Client {
+	if cfg.Deepseek.APIKey != "" {
+		return ai.NewDeepSeekClient(cfg.Deepseek.APIKey, cfg.Deepseek.Model)
+	}
+	return ai.NewClient(cfg.Ollama.Address, cfg.Ollama.Model, cfg.Ollama.Username, cfg.Ollama.Password)
+}
+
 // emailCl builds an email client from config, or returns nil if not configured.
 func newEmailClient(cfg *config.Config) *email.Client {
 	return email.New(cfg.SMTP.Host, cfg.SMTP.Port, cfg.SMTP.Username, cfg.SMTP.Password, cfg.SMTP.From, cfg.SMTP.SiteURL)
@@ -77,7 +84,7 @@ func runPipeline(ctx context.Context, db *store.Store, cfg *config.Config) {
 		return
 	}
 
-	client := ai.NewClient(cfg.Ollama.Address, cfg.Ollama.Model, cfg.Ollama.Username, cfg.Ollama.Password)
+	client := newAIClient(cfg)
 	for _, article := range articles {
 		scoreResult, err := client.ScoreArticle(ctx, article)
 		if err != nil {

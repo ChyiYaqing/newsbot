@@ -1,6 +1,6 @@
 # Newsbot
 
-Newsbot 是一个自动化技术新闻聚合与分析工具。它从 Hacker News 热门博客中抓取最新文章，利用 AI（Ollama）进行评分、分类、摘要和趋势分析，通过 Telegram Bot 推送每日技术速报，并支持邮件订阅（Gmail / SMTP）。前端采用 React SPA，后端提供纯 REST API，通过 nginx 反向代理统一对外暴露。
+Newsbot 是一个自动化技术新闻聚合与分析工具。它从 Hacker News 热门博客中抓取最新文章，利用 AI（Ollama 或 DeepSeek API）进行评分、分类、摘要和趋势分析，通过 Telegram Bot 推送每日技术速报，并支持邮件订阅（Gmail / SMTP）。前端采用 React SPA，后端提供纯 REST API，通过 nginx 反向代理统一对外暴露。
 
 ## 系统架构
 
@@ -10,6 +10,7 @@ graph TB
         HN["HN Popularity CDN"]
         RSS["博客 RSS/Atom"]
         Ollama["Ollama AI"]
+        DeepSeek["DeepSeek API"]
     end
 
     subgraph Deploy["Docker Compose"]
@@ -31,7 +32,9 @@ graph TB
     HN -->|Top 100 博客| Pipeline
     RSS -->|文章内容| Pipeline
     Pipeline -->|评分/摘要| Ollama
+    Pipeline -->|评分/摘要| DeepSeek
     Ollama -->|AI 结果| Pipeline
+    DeepSeek -->|AI 结果| Pipeline
     Pipeline --> DB
     Scheduler -->|触发| Pipeline
     DB --> HTTP
@@ -86,7 +89,9 @@ graph LR
 
 ### 前置条件
 
-- Ollama 实例（或兼容 OpenAI API 的服务）
+- AI 后端二选一：
+  - **Ollama** 实例（或其他兼容 OpenAI API 的服务）
+  - **DeepSeek API Key**（设置后优先于 Ollama）
 - （可选）Telegram Bot Token
 - （可选）SMTP 服务，如 Gmail App Password
 - Docker & Docker Compose（生产部署）
@@ -99,13 +104,23 @@ graph LR
 ollama:
   address: "https://your-ollama-server.com"
   model: "gemma3:4b"
+
+deepseek:
+  model: "deepseek-chat"
+  # api_key 通过 .env 或环境变量设置，设置后优先于 Ollama
 ```
 
 创建 `.env` 文件存放敏感信息：
 
 ```
+# Ollama（二选一）
 OLLAMA_USERNAME=your_username
 OLLAMA_PASSWORD=your_password
+
+# DeepSeek API（二选一，设置后优先于 Ollama）
+DEEPSEEK_API_KEY=sk-...
+DEEPSEEK_MODEL=deepseek-chat    # 可选，默认 deepseek-chat
+
 TG_BOT_TOKEN=123456:ABC-DEF...
 TG_CHAT_ID=-100123456789
 
@@ -126,6 +141,8 @@ SITE_URL=https://your-site.com
 | `OLLAMA_MODEL` | 模型名称（默认 `gemma3:4b`） |
 | `OLLAMA_USERNAME` | Basic Auth 用户名 |
 | `OLLAMA_PASSWORD` | Basic Auth 密码 |
+| `DEEPSEEK_API_KEY` | DeepSeek API Key（设置后优先于 Ollama） |
+| `DEEPSEEK_MODEL` | DeepSeek 模型名称（默认 `deepseek-chat`） |
 | `TG_BOT_TOKEN` | Telegram Bot API Token |
 | `TG_CHAT_ID` | Telegram 聊天/频道 ID |
 | `SMTP_HOST` | SMTP 服务器地址（如 `smtp.gmail.com`） |
@@ -305,7 +322,7 @@ newsbot/
     ├── store/                       # SQLite 持久化（blogs / articles / article_analysis / subscribers）
     ├── hnpopular/                   # HN Popularity CDN 数据解析
     ├── scraper/                     # 并发 RSS/Atom 抓取
-    ├── ai/                          # Ollama 客户端（评分 / 摘要 / 趋势分析）
+    ├── ai/                          # AI 客户端：Ollama / DeepSeek API（评分 / 摘要 / 趋势分析）
     ├── server/                      # HTTP 服务（REST API + 订阅接口 + CORS）
     ├── notify/                      # 通知接口（Notifier）
     │   ├── telegram/                # Telegram Bot 实现（HTML 格式，自动分片）

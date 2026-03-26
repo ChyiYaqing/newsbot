@@ -250,12 +250,21 @@ sequenceDiagram
 | `GET /health` | 健康检查 — `{"status":"ok"}` |
 | `GET /api/articles?window=24h&limit=20` | 文章列表（JSON），按总分降序，同分按时间降序 |
 | `GET /api/articles/{id}` | 单篇文章详情（JSON） |
+| `GET /api/categories?window=24h` | 当前时间窗口内的文章分类列表 |
+| `GET /api/stats?window=24h` | 统计信息（总文章数、已分析数、平均分、最高分） |
 | `POST /api/subscribe` | 邮件订阅 — body: `{"email":"user@example.com"}` |
 | `GET /api/unsubscribe?token=xxx` | 一键退订（邮件中的退订链接） |
 
 **查询参数：**
 - `window` — 时间窗口：`24h`（默认）、`3days`、`7days`
 - `limit` — 返回数量：1-100，默认 20
+- `category` — 按分类过滤（可选，如 `AI/ML`、`Security`）
+
+**响应特性：**
+- 全局启用 gzip 压缩，文本类响应体积减少约 70-80%
+- 文章列表接口带 5 分钟内存缓存，缓存命中时 TTFB < 1ms；每次 pipeline 完成后自动失效
+- 响应头携带 `Cache-Control: public, max-age=300`，支持 CDN / 浏览器缓存
+- 缓存命中时响应头包含 `X-Cache: HIT`
 
 **响应示例：**
 
@@ -323,7 +332,7 @@ newsbot/
     ├── hnpopular/                   # HN Popularity CDN 数据解析
     ├── scraper/                     # 并发 RSS/Atom 抓取
     ├── ai/                          # AI 客户端：Ollama / DeepSeek API（评分 / 摘要 / 趋势分析）
-    ├── server/                      # HTTP 服务（REST API + 订阅接口 + CORS）
+    ├── server/                      # HTTP 服务（REST API + 订阅接口 + CORS + gzip + 内存缓存）
     ├── notify/                      # 通知接口（Notifier）
     │   ├── telegram/                # Telegram Bot 实现（HTML 格式，自动分片）
     │   └── email/                   # SMTP 邮件客户端（Gmail / 587 STARTTLS / 465 TLS）

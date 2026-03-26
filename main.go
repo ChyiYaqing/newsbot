@@ -369,7 +369,7 @@ func cmdRun(db *store.Store, cfg *config.Config) {
 	}()
 
 	// Start cron scheduler (blocks until ctx is cancelled)
-	if err := scheduler.Run(ctx, db, cfg, schedule); err != nil {
+	if err := scheduler.Run(ctx, db, cfg, schedule, srv.Cache().Invalidate); err != nil {
 		log.Fatalf("Scheduler error: %v", err)
 	}
 }

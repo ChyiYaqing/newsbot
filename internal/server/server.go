@@ -1,12 +1,16 @@
 package server
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/chyiyaqing/newsbot/internal/store"
@@ -16,6 +20,46 @@ type Server struct {
 	db      *store.Store
 	emailCl EmailClient
 	srv     *http.Server
+	cache   *apiCache
+}
+
+// apiCache is a simple in-memory cache with TTL for API responses.
+type apiCache struct {
+	mu      sync.Mutex
+	entries map[string]cacheEntry
+}
+
+type cacheEntry struct {
+	data      []byte
+	expiresAt time.Time
+}
+
+func newAPICache() *apiCache {
+	return &apiCache{entries: make(map[string]cacheEntry)}
+}
+
+func (c *apiCache) get(key string) ([]byte, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e, ok := c.entries[key]
+	if !ok || time.Now().After(e.expiresAt) {
+		delete(c.entries, key)
+		return nil, false
+	}
+	return e.data, true
+}
+
+func (c *apiCache) set(key string, data []byte, ttl time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries[key] = cacheEntry{data: data, expiresAt: time.Now().Add(ttl)}
+}
+
+// Invalidate removes all cache entries (called after pipeline runs).
+func (c *apiCache) Invalidate() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries = make(map[string]cacheEntry)
 }
 
 // EmailClient is a minimal interface for sending HTML emails.
@@ -25,7 +69,7 @@ type EmailClient interface {
 }
 
 func New(db *store.Store, addr string, emailCl EmailClient) *Server {
-	s := &Server{db: db, emailCl: emailCl}
+	s := &Server{db: db, emailCl: emailCl, cache: newAPICache()}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.handleHealth)
@@ -38,9 +82,14 @@ func New(db *store.Store, addr string, emailCl EmailClient) *Server {
 
 	s.srv = &http.Server{
 		Addr:    addr,
-		Handler: corsMiddleware(mux),
+		Handler: gzipMiddleware(corsMiddleware(mux)),
 	}
 	return s
+}
+
+// Cache returns the server's API cache so callers can invalidate it after pipeline runs.
+func (s *Server) Cache() *apiCache {
+	return s.cache
 }
 
 // Start begins listening. It blocks until the server is shut down.
@@ -84,5 +133,32 @@ func corsMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		next.ServeHTTP(w, r)
+	})
+}
+
+type gzipResponseWriter struct {
+	http.ResponseWriter
+	Writer io.Writer
+}
+
+func (g *gzipResponseWriter) Write(b []byte) (int, error) {
+	return g.Writer.Write(b)
+}
+
+func gzipMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		gz, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
+		if err != nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		defer gz.Close()
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Del("Content-Length")
+		next.ServeHTTP(&gzipResponseWriter{ResponseWriter: w, Writer: gz}, r)
 	})
 }

@@ -31,19 +31,27 @@ func newEmailClient(cfg *config.Config) *email.Client {
 	return email.New(cfg.SMTP.Host, cfg.SMTP.Port, cfg.SMTP.Username, cfg.SMTP.Password, cfg.SMTP.From, cfg.SMTP.SiteURL)
 }
 
-func Run(ctx context.Context, db *store.Store, cfg *config.Config, schedule string) error {
+func Run(ctx context.Context, db *store.Store, cfg *config.Config, schedule string, onComplete ...func()) error {
 	if schedule == "" {
 		schedule = "0 */6 * * *" // every 6 hours
+	}
+
+	notify := func() {
+		for _, fn := range onComplete {
+			fn()
+		}
 	}
 
 	// Run pipeline immediately on startup.
 	log.Println("Running initial pipeline...")
 	runPipeline(ctx, db, cfg)
+	notify()
 
 	c := cron.New()
 
 	_, err := c.AddFunc(schedule, func() {
 		runPipeline(ctx, db, cfg)
+		notify()
 	})
 	if err != nil {
 		return err

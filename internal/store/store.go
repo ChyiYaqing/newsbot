@@ -127,6 +127,9 @@ func (s *Store) migrate() error {
 
 		CREATE INDEX IF NOT EXISTS idx_analysis_total_score ON article_analysis(total_score DESC);
 		CREATE INDEX IF NOT EXISTS idx_analysis_article_id ON article_analysis(article_id);
+		CREATE INDEX IF NOT EXISTS idx_analysis_score_covering ON article_analysis(total_score DESC, article_id);
+		CREATE INDEX IF NOT EXISTS idx_analysis_category_score ON article_analysis(category, total_score DESC);
+		CREATE INDEX IF NOT EXISTS idx_analysis_notified_score ON article_analysis(notified_at, total_score DESC);
 	`)
 	if err != nil {
 		return err

@@ -70,6 +70,15 @@ func (s *Server) handleAPIArticles(w http.ResponseWriter, r *http.Request) {
 
 	category := r.URL.Query().Get("category")
 
+	cacheKey := "articles:" + window + ":" + strconv.Itoa(limit) + ":" + category
+	if cached, ok := s.cache.get(cacheKey); ok {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=300")
+		w.Header().Set("X-Cache", "HIT")
+		w.Write(cached) //nolint:errcheck
+		return
+	}
+
 	var (
 		articles []store.ArticleWithAnalysis
 		err      error
@@ -90,11 +99,18 @@ func (s *Server) handleAPIArticles(w http.ResponseWriter, r *http.Request) {
 		items[i] = toAPIArticle(a)
 	}
 
-	writeJSON(w, http.StatusOK, apiListResponse{
-		Window:   window,
-		Count:    len(items),
-		Articles: items,
-	})
+	resp := apiListResponse{Window: window, Count: len(items), Articles: items}
+	data, err := json.Marshal(resp)
+	if err != nil {
+		log.Printf("ERROR: api marshal articles: %v", err)
+		writeJSON(w, http.StatusInternalServerError, apiError{Error: "internal error"})
+		return
+	}
+	s.cache.set(cacheKey, data, 5*time.Minute)
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	w.Write(data) //nolint:errcheck
 }
 
 // GET /api/articles/{id}
